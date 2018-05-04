@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
+#include <time.h>
 
 #include <omp.h>
 
@@ -20,7 +21,7 @@ struct dataset {
 };
 
 
-struct dataset * read_dataset(char * file_name);
+struct dataset * read_dataset(char * file_name, int max_lines);
 
 void free_dataset(struct dataset * dset);
 
@@ -30,61 +31,83 @@ int knn(struct dataset *train, struct point *p, int K);
 
 void copy_point(struct point * src, struct point * dst, int num);
 
-void get_k_small(struct point * points, float dists[], int num, int K);
+void get_k_small(struct point * points, float dists[], int num_points, int num_attrs, int K);
+
+void get_confusion_matrix(struct dataset * test, int * pred);
 
 
 int main(int argc, char *argv[]) {
 
-	int i, j;
-	char train_file[NAMEBUFFER];
-	char test_file[NAMEBUFFER];
-	int K;
-
+	clock_t start, end, diff;
+	int i, j, hit, K, max_tr_lines, max_te_lines;
+	char train_file[NAMEBUFFER], test_file[NAMEBUFFER];
 	struct dataset *train, *test;
 
-	if (argc > 3) {
+	if (argc == 4) {
+
 		strcpy(train_file, argv[1]);
 		strcpy(test_file, argv[2]);
 		K = atoi(argv[3]);
+		max_tr_lines = 0;
+		max_te_lines = 0;
+
+	} else if (argc == 6) {
+
+		strcpy(train_file, argv[1]);
+		strcpy(test_file, argv[2]);
+		K = atoi(argv[3]);
+		max_tr_lines = atoi(argv[4]);
+		max_te_lines = atoi(argv[5]);
+
 	} else {
 		printf("Wrong number of parameters.\nExiting.\n");
 		exit(0);
 	}
 
-	train = read_dataset(train_file);
-	test = read_dataset(test_file);
+	start = clock();
 
-	//#pragma omp parallel for
-	//test->num_points
-	test->num_points = 10;
+	train = read_dataset(train_file, max_tr_lines);
+	test = read_dataset(test_file, max_te_lines);
 
-	int hit = 0;
-	float d = 0.0;
+	printf("TR: %d\t TE: %d\n", train->num_points, test->num_points);
+
+	int rej = 0, err = 0;
+	hit = 0;
+	int pred[test->num_points];
 	for (i = 0; i < test->num_points; i++) {
-		//if (i % 1000 == 0) printf("%d\n", i);
-		
-		for (j = 0; j < train->num_points; j++) {
-			d += euclidean_dist(train->points[j], test->points[i], test->num_attrs);
-		}
-		//hit += knn(train, &test->points[i], K);
+		pred[i] = knn(train, &test->points[i], K);
+		//printf("%d\n", (pred[i] == test->points[i].label));
+		if (pred[i] == -1) rej++;
+		else if (pred[i] == test->points[i].label) hit++;
+		else err++;
+		//predhit += (pred[i] == test->points[i].label);
 	}
-	printf("%f\n", d);
-	//printf("acc: %f\n", (float)hit/1000);
+
+	err = test->num_points - (hit+rej);
+
+	printf("acc: %5d \t %f\n", hit, (float) hit / test->num_points);
+	printf("rej: %5d \t %f\n", rej, (float) rej / test->num_points);
+	printf("err: %5d \t %5d\n", err, hit+rej+err);
+
+	get_confusion_matrix(test, pred);
 
 	free_dataset(train);
 	free_dataset(test);
+
+	end = clock();
+
+	printf("Time: %f\n", (double) (end - start) / CLOCKS_PER_SEC);
 
 	return 0;
 }
 
 
-struct dataset * read_dataset(char * file_name) {
+struct dataset * read_dataset(char * file_name, int max_lines) {
 
 	FILE *file;
 
 	int BUFFER_SIZE = 10000;
 	char buffer[BUFFER_SIZE];
-	char **lines_buffer;
 
 	int i, j;
 	struct dataset * dset;
@@ -103,27 +126,19 @@ struct dataset * read_dataset(char * file_name) {
 	dset->num_attrs  = atoi(strtok(NULL, " "));
 	dset->num_class  = atoi(strtok(NULL, " "));
 
-	printf("%d | %d | %d\n", dset->num_points, dset->num_attrs, dset->num_class);
+	dset->num_points = (max_lines == 0 || max_lines > dset->num_points) ? dset->num_points : max_lines;
 
 	dset->points = (struct point *) malloc (dset->num_points * sizeof(struct point));
 
-	lines_buffer = (char **) malloc(dset->num_points * sizeof(char*));
 	for (i = 0; i < dset->num_points; i++) {
 		dset->points[i].values = (float *) malloc( dset->num_attrs * sizeof(float) );
-		lines_buffer[i] = (char *) malloc(BUFFER_SIZE * sizeof(char));
-		fgets(lines_buffer[i], BUFFER_SIZE, file);
-	}
 
-	// ler todas as linhas pra memoria
-	//#pragma omp parallel for private(j)
-	for (i = 0; i < dset->num_points; i++) {
+		fgets(buffer, BUFFER_SIZE, file);
 
-		dset->points[i].values[0] = atof(strtok(lines_buffer[i], " "));
-
+		dset->points[i].values[0] = atof(strtok(buffer, " "));
 		for (j = 1; j < dset->num_attrs; j++) {
 			dset->points[i].values[j] = atof(strtok(NULL, " "));
 		}
-
 		dset->points[i].label = atoi(strtok(NULL, " "));
 	}
 
@@ -150,7 +165,6 @@ float euclidean_dist(struct point pA, struct point pB, int num_attrs) {
 	float sum = 0.0;
 	float diffs[num_attrs];
 
-	#pragma omp reduction (+:sum)
 	for (i = 0; i < num_attrs; i++) {
 		sum += (pA.values[i] - pB.values[i]) * (pA.values[i] - pB.values[i]);
 	}
@@ -172,9 +186,8 @@ int knn(struct dataset *train, struct point *p, int K) {
 	}
 
 	//pre-sort the points putting K smallest items on the beginning
-	get_k_small(train->points, dists, train->num_points, K);
+	get_k_small(train->points, dists, train->num_points, train->num_attrs, K);
 
-	#pragma omp parallel for
 	for (i = 0; i < train->num_class; i++) {
 		classes[i] = 0;
 	}
@@ -184,52 +197,62 @@ int knn(struct dataset *train, struct point *p, int K) {
 	}
 
 	int max = 0;
+	printf("%d ", classes[max]);
 	for (i = 1; i < train->num_class; i++) {
 		if (classes[i] > classes[max]) {
 			max = i;
 		}
+		printf("%d ", classes[i]);
 	}
+	printf(" | %d : %d ", max, p->label);
 
-	//printf("%d | %d | %d\n", max, p->label, max == p->label);
+	for (i = 0; i < train->num_class; i++) {
+		if (i != max && classes[i] == classes[max]) {
+			printf("rej\n");
+			//rejeita
+			return -1;
+		}
+	}
+	printf("\n");
 
-	return max == p->label;
+	return max;// == p->label;
 }
 
 
-void copy_point(struct point * src, struct point * dst, int num) {
+void copy_point(struct point * src, struct point * dst, int size) {
 	int i;
 
 	#pragma omp parallel for
-	for (i = 0; i < num; i++) {
+	for (i = 0; i < size; i++) {
 		dst->values[i] = src->values[i];
 	}
 	dst->label = src->label;
 }
 
 
-void get_k_small(struct point * points, float dists[], int num, int K) {
+void get_k_small(struct point * points, float dists[], int num_points, int num_attrs, int K) {
 	int i, j;
 	struct point *temp;
 	float tempd;
 
 	temp = (struct point *) malloc(sizeof(struct point));
-	temp->values = (float *) malloc(4 * sizeof(float));
+	temp->values = (float *) malloc(num_attrs * sizeof(float));
 
 	for (i = 0; i < K; i++) {
 
 		int min_index = i;
 		float min_value = dists[i];
 
-		for (j = i + 1; j < num; j++) {
+		for (j = i + 1; j < num_points; j++) {
 
 			if (dists[j] < min_value) {
 
 				min_index = j;
 				min_value = dists[j];
 
-				copy_point(&points[i], temp, 4);
-				copy_point(&points[min_index], &points[i], 4);
-				copy_point(temp, &points[min_index], 4);
+				copy_point(&points[i], temp, num_attrs);
+				copy_point(&points[min_index], &points[i], num_attrs);
+				copy_point(temp, &points[min_index], num_attrs);
 
 				tempd = dists[i];
 				dists[i] = dists[min_index];
@@ -242,3 +265,27 @@ void get_k_small(struct point * points, float dists[], int num, int K) {
 	free(temp);
 }
 
+
+void get_confusion_matrix(struct dataset * test, int * pred) {
+	int i, j;
+	int matrix[test->num_class][test->num_class];
+
+	for (i = 0; i < test->num_class; i++) {
+		for (j = 0; j < test->num_class; j++) {
+			matrix[i][j] = 0;
+		}
+	}
+
+	for (i = 0; i < test->num_points; i++) {
+		int e = test->points[i].label;
+		int p = pred[i];
+ 		matrix[e][p]++;
+	}
+
+	for (i = 0; i < test->num_class; i++) {
+		for (j = 0; j < test->num_class; j++) {
+			printf("%5d ", matrix[i][j]);
+		}
+		printf("\n");
+	}
+}
