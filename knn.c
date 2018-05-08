@@ -39,7 +39,7 @@ void get_confusion_matrix(struct dataset * test, int * pred);
 int main(int argc, char *argv[]) {
 
 	clock_t start, end, diff;
-	int i, j, hit, K, max_tr_lines, max_te_lines;
+	int i, j, hit, rej, err, K, max_tr_lines, max_te_lines, *pred;
 	char train_file[NAMEBUFFER], test_file[NAMEBUFFER];
 	struct dataset *train, *test;
 
@@ -69,28 +69,30 @@ int main(int argc, char *argv[]) {
 	train = read_dataset(train_file, max_tr_lines);
 	test = read_dataset(test_file, max_te_lines);
 
+	hit = rej = err = 0;
+	pred = (int*) malloc(test->num_points * sizeof(int));
+
 	printf("TR: %d\t TE: %d\n", train->num_points, test->num_points);
 
-	int rej = 0, err = 0;
-	hit = 0;
-	int pred[test->num_points];
 	for (i = 0; i < test->num_points; i++) {
+
 		pred[i] = knn(train, &test->points[i], K);
-		//printf("%d\n", (pred[i] == test->points[i].label));
+
 		if (pred[i] == -1) rej++;
 		else if (pred[i] == test->points[i].label) hit++;
 		else err++;
-		//predhit += (pred[i] == test->points[i].label);
 	}
 
 	err = test->num_points - (hit+rej);
 
+	printf("TR: %d\t TE: %d\n", train->num_points, test->num_points);
 	printf("acc: %5d \t %f\n", hit, (float) hit / test->num_points);
 	printf("rej: %5d \t %f\n", rej, (float) rej / test->num_points);
 	printf("err: %5d \t %5d\n", err, hit+rej+err);
 
 	get_confusion_matrix(test, pred);
 
+	free(pred);
 	free_dataset(train);
 	free_dataset(test);
 
