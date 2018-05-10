@@ -4,4 +4,7 @@ FLAGS = -lm -fopenmp
 
 all:
 	echo No OMP
-	$(CC) knn.c -o knn $(FLAGS)
+	$(CC) utils.c kdtree.c knn.c -o knn $(FLAGS)
+
+kdtree:
+	$(CC) kdtree.c utils.c test.c -o test $(FLAGS)

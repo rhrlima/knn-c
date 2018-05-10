@@ -22,7 +22,7 @@ int main() {
 		printf("P %d\n", p[i]->label);
 	}
 
-	n = build_kdtree(p, 0, size, 0);
+	//n = build_kdtree(p, 0, size);
 
 	return 0;
 }

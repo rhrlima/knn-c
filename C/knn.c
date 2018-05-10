@@ -6,12 +6,17 @@
 
 #include <omp.h>
 
+
+#include "utils.h"
+#include "kdtree.h"
+
+
 #define NAMEBUFFER 100
 
-struct point {
-	float *values;
-	int label;
-};
+// struct point {
+// 	float *values;
+// 	int label;
+// };
 
 struct dataset {
 	int num_points;
@@ -25,11 +30,7 @@ struct dataset * read_dataset(char * file_name, int max_lines);
 
 void free_dataset(struct dataset * dset);
 
-float euclidean_dist(struct point pA, struct point pB, int num_attrs);
-
 int knn(struct dataset *train, struct point *p, int K);
-
-void copy_point(struct point * src, struct point * dst, int num);
 
 void get_k_small(struct point * points, float dists[], int num_points, int num_attrs, int K);
 
@@ -76,7 +77,7 @@ int main(int argc, char *argv[]) {
 
 	for (i = 0; i < test->num_points; i++) {
 
-		pred[i] = knn(train, &test->points[i], K);
+		pred[i] = 0;//knn(train, &test->points[i], K);
 
 		if (pred[i] == -1) rej++;
 		else if (pred[i] == test->points[i].label) hit++;
@@ -91,6 +92,11 @@ int main(int argc, char *argv[]) {
 	printf("err: %5d \t %5d\n", err, hit+rej+err);
 
 	get_confusion_matrix(test, pred);
+
+	//----
+	struct tree_node *kdtree = build_kdtree(test->points, test->num_attrs, 0, test->num_points, 0);
+	nearest_node(kdtree)
+	//----
 
 	free(pred);
 	free_dataset(train);
@@ -161,20 +167,6 @@ void free_dataset(struct dataset * dset) {
 }
 
 
-float euclidean_dist(struct point pA, struct point pB, int num_attrs) {
-	
-	int i;
-	float sum = 0.0;
-	float diffs[num_attrs];
-
-	for (i = 0; i < num_attrs; i++) {
-		sum += (pA.values[i] - pB.values[i]) * (pA.values[i] - pB.values[i]);
-	}
-
-	return sqrt(sum);
-}
-
-
 int knn(struct dataset *train, struct point *p, int K) {
 
 	int i, hit = 0;
@@ -218,17 +210,6 @@ int knn(struct dataset *train, struct point *p, int K) {
 	printf("\n");
 
 	return max;// == p->label;
-}
-
-
-void copy_point(struct point * src, struct point * dst, int size) {
-	int i;
-
-	#pragma omp parallel for
-	for (i = 0; i < size; i++) {
-		dst->values[i] = src->values[i];
-	}
-	dst->label = src->label;
 }
 
 
