@@ -32,11 +32,35 @@ struct tree_node *build_kdtree(struct point *points, int num_attr, int start, in
 	return node;
 }
 
+
+void free_kdtree(struct tree_node *kdtree) {
+
+	printf("%d\n", kdtree == NULL);
+	printf("%d\n", kdtree->left == NULL);
+	printf("%d\n", kdtree->right == NULL); 
+
+	// if (kdtree != NULL) {
+	// 	free_kdtree(kdtree->left);
+	// 	free_kdtree(kdtree->right);
+	// 	free(kdtree);
+	// }
+} 
+
+
 struct point *nearest_nodes(struct tree_node *kdtree, struct point p, int num_attr, int K) {
 
-	float dist = euclidean_dist(p, kdtree.value, num_attr);
+	struct point temp;
+	copy_point(kdtree->value, &temp, num_attr);
+	float d = euclidean_dist(temp, p, num_attr);
 
-	printf("%f\n", dist);
+	printf("%f\n", d);
 
 	return NULL;
+}
+
+void print_nodes(struct tree_node *kdtree) {
+	if (kdtree == NULL) return;
+	printf("%d\n", kdtree->value->label);
+	print_nodes(kdtree->left);
+	print_nodes(kdtree->right);
 }

@@ -95,8 +95,10 @@ int main(int argc, char *argv[]) {
 
 	//----
 	struct tree_node *kdtree = build_kdtree(test->points, test->num_attrs, 0, test->num_points, 0);
-	nearest_node(kdtree)
+	//nearest_nodes(kdtree, test->points[0], test->num_attrs, K);
 	//----
+
+	free_kdtree(kdtree);
 
 	free(pred);
 	free_dataset(train);
